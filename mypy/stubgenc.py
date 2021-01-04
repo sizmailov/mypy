@@ -234,11 +234,13 @@ def strip_or_import(typ: str, module: ModuleType, imports: List[str]) -> str:
     return stripped_type
 
 
-def generate_c_property_stub(name: str, obj: object, output: List[str], readonly: bool) -> None:
+def generate_c_property_stub(name: str, obj: object, output: List[str], readonly: bool, module: ModuleType = None,
+                             imports: List[str] = None) -> None:
     """Generate property stub using introspection of 'obj'.
 
     Try to infer type from docstring, append resulting lines to 'output'.
     """
+
     def infer_prop_type(docstr: Optional[str]) -> Optional[str]:
         """Infer property type from docstring or docstring signature."""
         if docstr is not None:
@@ -255,6 +257,9 @@ def generate_c_property_stub(name: str, obj: object, output: List[str], readonly
         inferred = infer_prop_type(getattr(fget, '__doc__', None))
     if not inferred:
         inferred = 'Any'
+
+    if module is not None and imports is not None:
+        inferred = strip_or_import(inferred, module, imports)
 
     output.append('@property')
     output.append('def {}(self) -> {}: ...'.format(name, inferred))
@@ -305,7 +310,8 @@ def generate_c_type_stub(module: ModuleType,
                                          class_sigs=class_sigs)
         elif is_c_property(value):
             done.add(attr)
-            generate_c_property_stub(attr, value, properties, is_c_property_readonly(value))
+            generate_c_property_stub(attr, value, properties, is_c_property_readonly(value), module=module,
+                                     imports=imports)
         elif is_c_type(value):
             generate_c_type_stub(module, attr, value, types, imports=imports, sigs=sigs,
                                  class_sigs=class_sigs)

@@ -55,6 +55,10 @@ def builtins_only_value_renderer(obj):
 def render_attribute(name, type_str, value_str):
     if value_str:
         value_str = " = {}".format(value_str)
+
+    if type_str == "None":
+        type_str = "Any"
+
     return "{}: {}{}".format(name, type_str, value_str)
 
 

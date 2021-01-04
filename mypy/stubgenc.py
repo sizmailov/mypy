@@ -8,7 +8,7 @@ import importlib
 import inspect
 import os.path
 import re
-from typing import List, Dict, Tuple, Optional, Mapping, Any, Set
+from typing import List, Dict, Tuple, Optional, Mapping, Any, Set, Callable
 from types import ModuleType
 
 from mypy.moduleinspect import is_c_module
@@ -31,10 +31,39 @@ _DEFAULT_TYPING_IMPORTS = (
 )
 
 
+def empty_value_renderer(obj):
+    return ""
+
+
+def is_builtin_value(obj):
+    if obj is None or isinstance(obj, (complex, int, bool, float, str, bytes)):
+        return True
+    if isinstance(obj, (set, list)):
+        return all([is_builtin_value(el) for el in obj])
+    if isinstance(obj, dict):
+        return all([is_builtin_value(key) and is_builtin_value(value) for key, value in obj.items()])
+    return False
+
+
+def builtin_value_renderer(obj):
+    if is_builtin_value(obj):
+        return repr(obj)
+    else:
+        return empty_value_renderer(obj)
+
+
+def render_attribute(name, type_str, value_str):
+    if value_str:
+        value_str = " = {}".format(value_str)
+    return "{}: {}{}".format(name, type_str, value_str)
+
+
 def generate_stub_for_c_module(module_name: str,
                                target: str,
                                sigs: Optional[Dict[str, str]] = None,
-                               class_sigs: Optional[Dict[str, str]] = None) -> None:
+                               class_sigs: Optional[Dict[str, str]] = None,
+                               value_renderer: Callable[[Any], str] = empty_value_renderer
+                               ) -> None:
     """Generate stub for C module.
 
     This combines simple runtime introspection (looking for docstrings and attributes
@@ -62,7 +91,7 @@ def generate_stub_for_c_module(module_name: str,
             continue
         if is_c_type(obj):
             generate_c_type_stub(module, name, obj, types, imports=imports, sigs=sigs,
-                                 class_sigs=class_sigs)
+                                 class_sigs=class_sigs, value_renderer=value_renderer)
             done.add(name)
     variables = []
     for name, obj in items:
@@ -70,7 +99,7 @@ def generate_stub_for_c_module(module_name: str,
             continue
         if name not in done and not inspect.ismodule(obj):
             type_str = strip_or_import(type(obj).__name__, module, imports)
-            variables.append('%s: %s' % (name, type_str))
+            variables.append(render_attribute(name, type_str, value_renderer(obj)))
     output = []
     for line in sorted(set(imports)):
         output.append(line)
@@ -274,7 +303,9 @@ def generate_c_type_stub(module: ModuleType,
                          output: List[str],
                          imports: List[str],
                          sigs: Optional[Dict[str, str]] = None,
-                         class_sigs: Optional[Dict[str, str]] = None) -> None:
+                         class_sigs: Optional[Dict[str, str]] = None,
+                         value_renderer: Callable[[Any], str] = empty_value_renderer
+                         ) -> None:
     """Generate stub for a single class using runtime introspection.
 
     The result lines will be appended to 'output'. If necessary, any
@@ -314,7 +345,7 @@ def generate_c_type_stub(module: ModuleType,
                                      imports=imports)
         elif is_c_type(value):
             generate_c_type_stub(module, attr, value, types, imports=imports, sigs=sigs,
-                                 class_sigs=class_sigs)
+                                 class_sigs=class_sigs, value_renderer=value_renderer)
             done.add(attr)
 
     variables = []
@@ -322,7 +353,8 @@ def generate_c_type_stub(module: ModuleType,
         if is_skipped_attribute(attr):
             continue
         if attr not in done:
-            variables.append('%s: %s = ...' % (attr, strip_or_import(type(value).__name__, module, imports)))
+            type_str = strip_or_import(type(value).__name__, module, imports)
+            variables.append(render_attribute(attr, type_str, value_renderer(value)))
     all_bases = obj.mro()
     if all_bases[-1] is object:
         # TODO: Is this always object?

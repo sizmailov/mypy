@@ -45,7 +45,7 @@ def is_builtin_value(obj):
     return False
 
 
-def builtin_value_renderer(obj):
+def builtins_only_value_renderer(obj):
     if is_builtin_value(obj):
         return repr(obj)
     else:

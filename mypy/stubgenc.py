@@ -282,6 +282,7 @@ def generate_c_type_stub(module: ModuleType,
     obj_dict = getattr(obj, '__dict__')  # type: Mapping[str, Any]  # noqa
     items = sorted(obj_dict.items(), key=lambda x: method_name_sort_key(x[0]))
     methods = []  # type: List[str]
+    types = []  # type: List[str]
     properties = []  # type: List[str]
     done = set()  # type: Set[str]
     for attr, value in items:
@@ -307,6 +308,10 @@ def generate_c_type_stub(module: ModuleType,
         elif is_c_property(value):
             done.add(attr)
             generate_c_property_stub(attr, value, properties, is_c_property_readonly(value))
+        elif is_c_type(value):
+            generate_c_type_stub(module, attr, value, types, imports=imports, sigs=sigs,
+                                 class_sigs=class_sigs)
+            done.add(attr)
 
     variables = []
     for attr, value in items:
@@ -339,10 +344,14 @@ def generate_c_type_stub(module: ModuleType,
         )
     else:
         bases_str = ''
-    if not methods and not variables and not properties:
+    if not methods and not variables and not properties and not types:
         output.append('class %s%s: ...' % (class_name, bases_str))
     else:
         output.append('class %s%s:' % (class_name, bases_str))
+        for line in types:
+            if output and output[-1] and not output[-1].startswith('class') and line.startswith('class'):
+                output.append('')
+            output.append('    ' + line)
         for variable in variables:
             output.append('    %s' % variable)
         for method in methods:

@@ -62,6 +62,21 @@ def render_attribute(name, type_str, value_str):
     return "{}: {}{}".format(name, type_str, value_str)
 
 
+def render_argument(name, type_str, value_str):
+    if value_str:
+        value_str = " = {}".format(value_str)
+    else:
+        value_str = ""
+
+    if type_str == "None":
+        type_str = "Any"  # None is not a valid argument name
+
+    if type_str:
+        type_str = ": {}".format(type_str)
+
+    return "{}{}{}".format(name, type_str, value_str)
+
+
 def generate_stub_for_c_module(module_name: str,
                                target: str,
                                sigs: Optional[Dict[str, str]] = None,
@@ -212,15 +227,12 @@ def generate_c_function_stub(module: ModuleType,
                 if arg.name == self_var:
                     arg_def = self_var
                 else:
-                    arg_def = arg.name
-                    if arg_def == 'None':
-                        arg_def = '_none'  # None is not a valid argument name
-
                     if arg.type:
-                        arg_def += ": " + strip_or_import(arg.type, module, imports)
+                        type_str = strip_or_import(arg.type, module, imports)
+                    else:
+                        type_str = ""
 
-                    if arg.default:
-                        arg_def += " = ..."
+                    arg_def = render_argument(arg.name, type_str, arg.default)
 
                 sig.append(arg_def)
 

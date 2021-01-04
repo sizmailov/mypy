@@ -33,7 +33,7 @@ def is_valid_type(s: str) -> bool:
 class ArgSig:
     """Signature info for a single argument."""
 
-    def __init__(self, name: str, type: Optional[str] = None, default: bool = False):
+    def __init__(self, name: str, type: Optional[str] = None, default: Optional[str] = None):
         self.name = name
         if type and not is_valid_type(type):
             raise ValueError("Invalid type: " + type)
@@ -80,6 +80,7 @@ class DocStringParser:
         self.arg_type = None  # type: Optional[str]
         self.arg_name = ""
         self.arg_default = None  # type: Optional[str]
+        self.arg_default_start = None  # type: Optional[int]
         self.ret_type = "Any"
         self.found = False
         self.args = []  # type: List[ArgSig]
@@ -127,13 +128,14 @@ class DocStringParser:
             else:
                 self.arg_name = self.accumulator
             self.accumulator = ""
+            self.arg_default_start = token.end[1]
             self.state.append(STATE_ARGUMENT_DEFAULT)
 
         elif (token.type == tokenize.OP and token.string in (',', ')') and
               self.state[-1] in (STATE_ARGUMENT_LIST, STATE_ARGUMENT_DEFAULT,
                                  STATE_ARGUMENT_TYPE)):
             if self.state[-1] == STATE_ARGUMENT_DEFAULT:
-                self.arg_default = self.accumulator
+                self.arg_default = token.line[self.arg_default_start:token.start[1]].strip()
                 self.state.pop()
             elif self.state[-1] == STATE_ARGUMENT_TYPE:
                 self.arg_type = self.accumulator
@@ -150,11 +152,11 @@ class DocStringParser:
                 self.state.pop()
             try:
                 self.args.append(ArgSig(name=self.arg_name, type=self.arg_type,
-                                        default=bool(self.arg_default)))
+                                        default=self.arg_default))
             except ValueError:
                 # wrong type, use Any
                 self.args.append(ArgSig(name=self.arg_name, type=None,
-                                        default=bool(self.arg_default)))
+                                        default=self.arg_default))
             self.arg_name = ""
             self.arg_type = None
             self.arg_default = None

@@ -172,7 +172,9 @@ class Options:
                  files: List[str],
                  verbose: bool,
                  quiet: bool,
-                 export_less: bool) -> None:
+                 export_less: bool,
+                 render_attribute_values: str
+                 ) -> None:
         # See parse_options for descriptions of the flags.
         self.pyversion = pyversion
         self.no_import = no_import
@@ -190,6 +192,7 @@ class Options:
         self.verbose = verbose
         self.quiet = quiet
         self.export_less = export_less
+        self.render_attribute_values = render_attribute_values
 
 
 class StubSource(BuildSource):
@@ -1509,6 +1512,9 @@ def parse_options(args: List[str]) -> Options:
     parser.add_argument('--parse-only', action='store_true',
                         help="don't perform semantic analysis of sources, just parse them "
                              "(only applies to Python modules, might affect quality of stubs)")
+    parser.add_argument('--render-attribute-values', choices=['none', 'builtin'], default='none',
+                        help="select the attribute values to be rendered "
+                             "(none: don't render values, builtin: render values of builtin types only)")
     parser.add_argument('--include-private', action='store_true',
                         help="generate stubs for objects and members considered private "
                              "(single leading underscore and no trailing underscores)")
@@ -1568,7 +1574,9 @@ def parse_options(args: List[str]) -> Options:
                    files=ns.files,
                    verbose=ns.verbose,
                    quiet=ns.quiet,
-                   export_less=ns.export_less)
+                   export_less=ns.export_less,
+                   render_attribute_values=ns.render_attribute_values
+                   )
 
 
 def main() -> None:

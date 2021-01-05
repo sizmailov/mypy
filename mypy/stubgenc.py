@@ -129,9 +129,10 @@ def generate_stub_for_c_module(module_name: str,
     functions = []  # type: List[str]
     done = set()
     items = sorted(module.__dict__.items(), key=lambda x: x[0])
+    is_pybind11 = is_pybind11_module(module)
     for name, obj in items:
         if is_c_function(obj):
-            generate_c_function_stub(module, name, obj, functions, imports=imports, sigs=sigs)
+            generate_c_function_stub(module, name, obj, functions, imports=imports, sigs=sigs, is_pybind11=is_pybind11)
             done.add(name)
     types = []  # type: List[str]
     for name, obj in items:
@@ -139,7 +140,7 @@ def generate_stub_for_c_module(module_name: str,
             continue
         if is_c_type(obj):
             generate_c_type_stub(module, name, obj, types, imports=imports, sigs=sigs,
-                                 class_sigs=class_sigs, value_renderer=value_renderer)
+                                 class_sigs=class_sigs, value_renderer=value_renderer, is_pybind11=is_pybind11)
             done.add(name)
     variables = []
     for name, obj in items:
@@ -206,6 +207,23 @@ def is_c_type(obj: object) -> bool:
     return inspect.isclass(obj) or type(obj) is type(int)
 
 
+def is_pybind11_type(obj: object) -> bool:
+    if is_c_type(obj):
+        for base in inspect.getmro(obj):
+            if 'pybind11' in base.__name__:
+                return True
+    return False
+
+
+def is_pybind11_module(module: ModuleType) -> bool:
+    """Detect signs of pybind11 module"""
+    # The detection relies on presence of pybind11 classes in the module
+    for name, obj in module.__dict__.items():
+        if is_pybind11_type(obj):
+            return True
+    return False
+
+
 def generate_c_function_stub(module: ModuleType,
                              name: str,
                              obj: object,
@@ -214,7 +232,9 @@ def generate_c_function_stub(module: ModuleType,
                              self_var: Optional[str] = None,
                              sigs: Optional[Dict[str, str]] = None,
                              class_name: Optional[str] = None,
-                             class_sigs: Optional[Dict[str, str]] = None) -> None:
+                             class_sigs: Optional[Dict[str, str]] = None,
+                             is_pybind11=False
+                             ) -> None:
     """Generate stub for a single function or method.
 
     The result (always a single line) will be appended to 'output'.
@@ -237,7 +257,11 @@ def generate_c_function_stub(module: ModuleType,
     else:
         docstr = getattr(obj, '__doc__', None)
         inferred = infer_sig_from_docstring(docstr, name)
-        if not inferred:
+        if inferred:
+            if is_pybind11 and len(inferred) > 2:
+                # Strip "generic" umbrella signature: (*args, **kwargs) -> Any
+                inferred = inferred[:-1]
+        else:
             if class_name and name not in sigs:
                 inferred = [FunctionSig(name, args=infer_method_sig(name), ret_type=ret_type)]
             else:
@@ -357,7 +381,8 @@ def generate_c_type_stub(module: ModuleType,
                          imports: List[str],
                          sigs: Optional[Dict[str, str]] = None,
                          class_sigs: Optional[Dict[str, str]] = None,
-                         value_renderer: Callable[[Any], str] = empty_value_renderer
+                         value_renderer: Callable[[Any], str] = empty_value_renderer,
+                         is_pybind11=False
                          ) -> None:
     """Generate stub for a single class using runtime introspection.
 
@@ -391,14 +416,14 @@ def generate_c_type_stub(module: ModuleType,
                     self_var = 'self'
                 generate_c_function_stub(module, attr, value, methods, imports=imports,
                                          self_var=self_var, sigs=sigs, class_name=class_name,
-                                         class_sigs=class_sigs)
+                                         class_sigs=class_sigs, is_pybind11=is_pybind11)
         elif is_c_property(value):
             done.add(attr)
             generate_c_property_stub(attr, value, properties, is_c_property_readonly(value), module=module,
                                      imports=imports)
         elif is_c_type(value):
             generate_c_type_stub(module, attr, value, types, imports=imports, sigs=sigs,
-                                 class_sigs=class_sigs, value_renderer=value_renderer)
+                                 class_sigs=class_sigs, value_renderer=value_renderer, is_pybind11=is_pybind11)
             done.add(attr)
 
     variables = []

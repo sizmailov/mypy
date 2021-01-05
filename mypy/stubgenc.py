@@ -64,6 +64,7 @@ def render_attribute(name, type_str, value_str):
 
 def render_argument(name, type_str, value_str):
     if value_str:
+        value_str = sanitize_value_str(value_str)
         value_str = " = {}".format(value_str)
     else:
         value_str = ""
@@ -75,6 +76,33 @@ def render_argument(name, type_str, value_str):
         type_str = ": {}".format(type_str)
 
     return "{}{}{}".format(name, type_str, value_str)
+
+
+_default_pybind11_repr_re = re.compile(r'(<(?P<class>\w+(\.\w+)*) object at 0x[0-9a-fA-F]+>)|'
+                                       r'(<(?P<enum>\w+(.\w+)+): \d+>)'  # pybind11-2.6.0+ enum default repr
+                                       )
+
+
+def replace_default_pybind11_repr(line) -> Tuple[List[str], str]:
+    invalid_defaults = []
+
+    def replacement(m):
+        if m.group("class"):
+            return "..."
+        return m.group("enum")
+
+    return invalid_defaults, _default_pybind11_repr_re.sub(replacement, line)
+
+
+def sanitize_value_str(value_str):
+    import ast
+
+    try:
+        ast.parse(value_str)
+        return value_str
+    except SyntaxError as e:
+        # TODO: warn about invalid default value in docstring signature
+        return "..."
 
 
 def generate_stub_for_c_module(module_name: str,
@@ -232,7 +260,13 @@ def generate_c_function_stub(module: ModuleType,
                     else:
                         type_str = ""
 
-                    arg_def = render_argument(arg.name, type_str, arg.default)
+                    if arg.default:
+                        _, value_str = replace_default_pybind11_repr(arg.default)
+                        # TODO: warn about invalid default value in docstring signature if any
+                    else:
+                        value_str = ""
+
+                    arg_def = render_argument(arg.name, type_str, value_str)
 
                 sig.append(arg_def)
 

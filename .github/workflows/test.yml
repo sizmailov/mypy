@@ -67,9 +67,9 @@ jobs:
         python -m pip install -r test-requirements.txt
         python -m pip install .
 
-    - name: Run stubgenc
+    - name: Run stubgen
       run: stubgen -p python_example -o test-data/stubgen/
 
-    - name: Check stubgenc output
+    - name: Check output
       run: |
-        git diff test-data/stubgen
+        git diff --exit-code test-data/stubgen/

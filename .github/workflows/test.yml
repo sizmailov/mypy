@@ -47,3 +47,29 @@ jobs:
       run: tox -e ${{ matrix.toxenv }} --notest
     - name: test
       run: tox -e ${{ matrix.toxenv }} --skip-pkg-install
+
+  stubgenc:
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v2
+
+    - name: initialize submodules
+      run: git submodule update --init
+
+    - name: Setup 🐍 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+
+    - name: Prepare env
+      run: |
+        python -m pip install -r test-requirements.txt
+        python -m pip install .
+
+    - name: Run stubgenc
+      run: stubgen -p python_example -o test-data/stubgen/
+
+    - name: Check stubgenc output
+      run: |
+        git diff test-data/stubgen

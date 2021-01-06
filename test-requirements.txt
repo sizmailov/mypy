@@ -15,3 +15,7 @@ py>=1.5.2
 virtualenv<20
 setuptools!=50
 importlib-metadata==0.20
+# stubgen compatibility with pybind
+pybind11
+numpy
+git+https://github.com/sizmailov/python_example.git@mypy-stubgen-test
